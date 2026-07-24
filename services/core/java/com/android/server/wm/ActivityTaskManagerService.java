@@ -2753,6 +2753,20 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         stopLockTaskModeInternal(null, true /* isSystemCaller */);
     }
 
+    @Override
+    public void rebuildSystemLockTaskPinnedMode() {
+        enforceTaskPermission("rebuildSystemLockTaskPinnedMode");
+        // This makes inner call to look as if it was initiated by system.
+        final long ident = Binder.clearCallingIdentity();
+        try {
+            synchronized (mGlobalLock) {
+                getLockTaskController().rebuildSystemLockTaskPinnedMode();
+            }
+        } finally {
+            Binder.restoreCallingIdentity(ident);
+        }
+    }
+
     void startLockTaskMode(@Nullable Task task, boolean isSystemCaller) {
         ProtoLog.w(WM_DEBUG_LOCKTASK, "startLockTaskMode: %s", task);
         if (task == null || task.mLockTaskAuth == LOCK_TASK_AUTH_DONT_LOCK) {
@@ -6177,6 +6191,15 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
         return mActiveUids.hasNonAppVisibleWindow(uid);
     }
 
+    /** Similar to {@link #hasActiveVisibleWindow(int)}, but only considers non pinned app
+     * windows */
+    boolean hasActiveVisibleNotPinnedWindow(int uid) {
+        if (mVisibleActivityProcessTracker.hasVisibleNotPinnedActivity(uid)) {
+            return true;
+        }
+        return mActiveUids.hasNonAppVisibleWindow(uid);
+    }
+
     boolean isDeviceOwner(int uid) {
         return uid >= 0 && mDeviceOwnerUid == uid;
     }
@@ -6260,7 +6283,10 @@ public class ActivityTaskManagerService extends IActivityTaskManager.Stub {
     }
 
     @Override
-    public void setRunningRemoteTransitionDelegate(IApplicationThread delegate) {
+    public void setRunningRemoteTransitionDelegate(IBinder transitionToken) {
+        final Transition transition = Transition.fromBinder(transitionToken);
+        if (transition == null) return;
+        final IApplicationThread delegate = transition.mRemoteDelegate;
         final TransitionController controller = getTransitionController();
         // A quick path without entering WM lock.
         if (delegate != null && controller.mRemotePlayer.reportRunning(delegate)) {

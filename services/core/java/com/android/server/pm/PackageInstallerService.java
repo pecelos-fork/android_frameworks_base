@@ -1037,6 +1037,14 @@ public class PackageInstallerService extends IPackageInstaller.Stub implements
                 // For now, installs to adopted media are treated as internal from
                 // an install flag point-of-view.
                 params.installFlags |= PackageManager.INSTALL_INTERNAL;
+                // Check if volumeUuid value is valid, else fail.
+                try {
+                    StorageManager.convert(params.volumeUuid);
+                } catch (IllegalArgumentException e) {
+                    throw new IllegalArgumentException("Invalid volumeUuid value in session "
+                            + "params: "
+                            + params.volumeUuid);
+                }
             } else {
                 params.installFlags |= PackageManager.INSTALL_INTERNAL;
 
@@ -1130,6 +1138,8 @@ public class PackageInstallerService extends IPackageInstaller.Stub implements
         }
 
         final var dpmi = LocalServices.getService(DevicePolicyManagerInternal.class);
+        // Only the system should be able to set this flag - so ensure it is unset when not needed.
+        params.installFlags &= ~PackageManager.INSTALL_FROM_MANAGED_USER_OR_PROFILE;
         if (dpmi != null && dpmi.isUserOrganizationManaged(userId)) {
             params.installFlags |= PackageManager.INSTALL_FROM_MANAGED_USER_OR_PROFILE;
         }
@@ -2135,6 +2145,10 @@ public class PackageInstallerService extends IPackageInstaller.Stub implements
     @Override
     public void addDeveloperVerificationExperiment(String packageName, int verificationPolicy,
             int[] results) {
+        final int callerUid = Binder.getCallingUid();
+        if (!PackageManagerServiceUtils.isRootOrShell(callerUid)) {
+            throw new SecurityException("Not allowed to add developer verification experiment");
+        }
         List<Integer> resultsList = new ArrayList<>(results.length);
         for (int i = 0; i < results.length; i++) {
             resultsList.add(results[i]);
@@ -2144,6 +2158,10 @@ public class PackageInstallerService extends IPackageInstaller.Stub implements
 
     @Override
     public void clearDeveloperVerificationExperiment(String packageName) {
+        final int callerUid = Binder.getCallingUid();
+        if (!PackageManagerServiceUtils.isRootOrShell(callerUid)) {
+            throw new SecurityException("Not allowed to clear developer verification experiment");
+        }
         mDeveloperVerifierController.clearExperiment(packageName);
     }
 
